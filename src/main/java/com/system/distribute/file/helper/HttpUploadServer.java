@@ -1,5 +1,7 @@
 package com.system.distribute.file.helper;
 
+import com.system.distribute.core.Node;
+
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.EventLoopGroup;
@@ -13,19 +15,26 @@ public class HttpUploadServer implements Runnable{
 
 
     private final int port;
-    public static boolean isSSL;
+   
+    private Node node;
 
-    public HttpUploadServer(int port) {
-        this.port = port;
-    }
-    @Override
+  
+    
+    
+    public HttpUploadServer(int port, Node node) {
+		super();
+		this.port = port;
+		this.node = node;
+	}
+
+	@Override
     public void run() {
         EventLoopGroup bossGroup = new NioEventLoopGroup();
         EventLoopGroup workerGroup = new NioEventLoopGroup();
         try {
             ServerBootstrap b = new ServerBootstrap();
             b.group(bossGroup, workerGroup).channel(NioServerSocketChannel.class)
-                    .childHandler(new HttpUploadServerInitializer());
+                    .childHandler(new HttpUploadServerInitializer(node));
 
             Channel ch = b.bind(port).sync().channel();
           
@@ -40,16 +49,5 @@ public class HttpUploadServer implements Runnable{
         }
     }
 
-    public static void main(String[] args) throws Exception {
-        int port;
-        if (args.length > 0) {
-            port = Integer.parseInt(args[0]);
-        } else {
-            port = 8080;
-        }
-        if (args.length > 1) {
-            isSSL = true;
-        }
-        new HttpUploadServer(port).run();
-    }
+   
 }

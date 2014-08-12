@@ -2,19 +2,39 @@ package com.system.distribute.file;
 
 
 
+import java.io.File;
+import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.net.InetSocketAddress;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
-
 import java.util.concurrent.ForkJoinPool;
+
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.search.BooleanClause.Occur;
+import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.search.FuzzyQuery;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.NumericRangeQuery;
+import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.util.Version;
+import org.wltea.analyzer.lucene.IKAnalyzer;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Queues;
-
 import com.system.common.InfiniteLoopDaemon;
 import com.system.distribute.config.IConfig;
 import com.system.distribute.config.ServiceConfig;
@@ -22,12 +42,12 @@ import com.system.distribute.context.Context;
 import com.system.distribute.core.Event;
 import com.system.distribute.core.Node;
 import com.system.distribute.core.NodeManager;
-
 import com.system.distribute.file.helper.ServerHelper;
-
 import com.system.distribute.file.monitor.FileEvent;
 import com.system.distribute.file.monitor.FileEventHandler;
 import com.system.distribute.service.FileSystemService;
+import com.system.distribute.sqlparser.Condition;
+import com.system.distribute.sqlparser.Query;
 
 /**
  * 
@@ -42,11 +62,12 @@ import com.system.distribute.service.FileSystemService;
 public class FileSystem implements Node{
 	
     public final static String NAME="distribute"+FileSystem.class.getSimpleName();
-    /**
-     * 本地文件系统的所有节点表 
-     */
-    Map<String,FNode> nodes=Maps.newConcurrentMap();
+   
     
+    private IndexSearcher searcher;
+    private Directory dir=null;
+    private IndexWriter indexWriter=null;
+    public static Analyzer analyzer=new IKAnalyzer(true);
     InfiniteLoopDaemon thread=null;
     
     Object obj=null;
@@ -57,21 +78,13 @@ public class FileSystem implements Node{
      */
    // private ConcurrentLinkedQueue listener=Queues.newConcurrentLinkedQueue();
     //采用transferQuer 以保证完整的FIFO 先进先出的队列
-    private LinkedTransferQueue listener=new LinkedTransferQueue();
-    
+   // private LinkedTransferQueue listener=new LinkedTransferQueue(); poll内存的bug低版本
+    private ConcurrentLinkedQueue listener=Queues.newConcurrentLinkedQueue();
     //这里由于 我们不使用rsync做进一步处理 所以 不需要进一步生存futrue 分割的结果
     //private ConcurrentLinkedQueue<Future<FileDataMessage>> futures=Queues.newConcurrentLinkedQueue();
     
     private IConfig config;
     
-	public  Map<String, FNode> getNodes() {
-		return nodes;
-	}
-    
-
-	public void setNodes(Map<String, FNode> nodes) {
-		this.nodes = nodes;
-	}
 
     @Override
 	public IConfig getConfig() {
@@ -106,6 +119,15 @@ public class FileSystem implements Node{
 		//注入到context上下文中 
 		Map<String,Object> map=(Map<String, Object>) fileprop;	
 		String path=ServerHelper.gennerFilePath(String.valueOf(map.get("syncPath")));
+		String indexdir=ServerHelper.gennerFilePath(String.valueOf(map.get("indexDir")));
+		File indexfiledir=new File(indexdir);
+		if(!indexfiledir.exists()) indexfiledir.mkdirs();
+		try {
+			dir=FSDirectory.open(indexfiledir);
+			
+			IndexWriterConfig indexWriterCfg = new IndexWriterConfig(Version.LUCENE_4_9, analyzer);
+			indexWriter=new IndexWriter(dir, indexWriterCfg);
+		
 		context.putValue("filesync",path);
 		//获取其他文件属性配置 
 		ForkJoinPool pool = new ForkJoinPool();
@@ -126,7 +148,15 @@ public class FileSystem implements Node{
 		FileSystemTask task=new FileSystemTask(path);
 		pool.submit(task);
 		pool.shutdown();
-		this.nodes=task.join();
+		indexWriter.addDocuments(task.join());
+		indexWriter.commit();
+		indexWriter.close();
+		searcher=new IndexSearcher(DirectoryReader.open(dir));
+		//task.join();
+		}catch (IOException e) {
+				
+				e.printStackTrace();
+			}
 		 if(thread!=null&&this.thread.isAlive()){
 	        	this.thread.stopThread();
 	        }else{
@@ -153,6 +183,80 @@ public class FileSystem implements Node{
 			thread.stopThread();
 		}
 	   
+	}
+	/**
+	 * 通过sql解析的query对象进行查询 
+	 * @param query
+	 * 添加（修改）人：zhuyuping
+	 */
+	public TopDocs search(Query query){
+		FileQuery fquery=(FileQuery) query;
+		 //new FuzzyQuery(q);
+		 BooleanQuery muquery = new BooleanQuery();
+	    List<String> needs=fquery.getNeedvalues();
+	    Condition condition=null;
+	    try{
+	    for (String need : needs) {
+	    	if(need.contains(".")){
+	    	String[] keys=need.split("\\.");
+	    	need=keys[1];
+	    	}
+			if(need.equalsIgnoreCase(fquery.FILENAME)){
+				QueryParser parser = new QueryParser(Version.LUCENE_4_9, fquery.FILENAME,  analyzer);
+				condition=searchCoditionValue(fquery,fquery.FILENAME);
+				if(condition!=null){
+				org.apache.lucene.search.Query q=parser.parse(condition.getY());
+				muquery.add(q, Occur.MUST);
+				}
+			}else if(need.equalsIgnoreCase(fquery.FILEOUT)){
+				
+				//todo
+			}else if(need.equalsIgnoreCase(fquery.FILEPATH)){
+				condition=searchCoditionValue(fquery,fquery.FILEPATH);
+				if(condition!=null){
+				Term t = new Term(fquery.FILEPATH, condition.getY());  
+				muquery.add(new FuzzyQuery(t), Occur.MUST);
+				}
+			}else if(need.equalsIgnoreCase(fquery.FILESIZE)){
+				condition=searchCoditionValue(fquery,fquery.FILESIZE);
+				if(condition!=null){
+				if(condition.getRelative().equals(Condition.Relative.EQUAL)){
+					int min=Integer.valueOf(condition.getY())-1024*1024;
+					min=min<0?0:min;
+
+				    muquery.add(NumericRangeQuery.newIntRange(
+							fquery.FILESIZE, min, Integer.valueOf(condition.getY())+1024*1024, true, true), Occur.MUST);
+				}else{
+					muquery.add(NumericRangeQuery.newIntRange(
+							fquery.FILESIZE, Integer.valueOf(condition.getY()), Integer.valueOf(condition.getY()), true, true), Occur.MUST);
+
+				}
+				}
+			}else if(need.equalsIgnoreCase(fquery.FILETYPE)){
+				condition=searchCoditionValue(fquery, fquery.FILETYPE);
+				if(condition!=null){
+				Term t = new Term(fquery.FILETYPE, condition.getY());  
+				muquery.add(new TermQuery(t), Occur.MUST);
+				}
+			}
+		}
+	    TopDocs docs=searcher.search(muquery, 10);
+	    return docs;
+	    }catch(Exception e){
+	    	return null;
+	    }
+	}
+
+	private Condition searchCoditionValue(FileQuery fquery,String str) {
+		   List<Condition> conditions=fquery.getConditions();
+		   for (Condition condition : conditions) {
+			   String x=condition.getX();
+			 if(x.contains(".")) x=x.split("\\.")[1];
+			 if(x.equalsIgnoreCase(str)){
+				 return condition;
+			 }
+		   }
+		return null;
 	}
 
 	public void addFileHandler(FileEvent fe, FileSystemManager fileSystemManager) {
@@ -257,6 +361,15 @@ public class FileSystem implements Node{
 		FileEvent fe=(FileEvent) event;
 		FileSystemManager fsm=(FileSystemManager) nodeManager;
 		addFileHandler(fe, fsm);
+	}
+
+	public TopDocs search(BooleanQuery query) throws IOException {
+		if(query==null) return null;
+		if(searcher!=null){
+			return searcher.search(query, 10);
+		}
+		return null;
+		
 	}
 
 

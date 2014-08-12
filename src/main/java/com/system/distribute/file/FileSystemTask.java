@@ -8,10 +8,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.RecursiveTask;
 
+import org.antlr.v4.runtime.misc.FlexibleHashMap;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.TextField;
+
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.system.distribute.file.monitor2.FileListener;
 import com.system.distribute.file.monitor2.FileMonitor;
+import com.system.distribute.util.FileNameUtils;
 
 
 /**
@@ -23,7 +30,7 @@ import com.system.distribute.file.monitor2.FileMonitor;
  * @created 2014-7-10 下午6:40:28 
  * @function:返回 当前文件系统的根节点 
  */
-public class FileSystemTask extends RecursiveTask<Map<String,FNode>>{
+public class FileSystemTask extends RecursiveTask<List<Document>>{
 	
 
 	/**
@@ -46,62 +53,56 @@ public class FileSystemTask extends RecursiveTask<Map<String,FNode>>{
 
 
 	@Override
-	protected Map<String,FNode> compute() {
+	protected List<Document> compute() {
 		
 		
 	    
-        FNode fnode=null;
+        List<Document> docs=Lists.newArrayList();
         File mfile=new File(path);
         if(!mfile.exists()) mfile.mkdirs();
 		File content[] = mfile.listFiles();
 		if (content == null) {
 			return null;
 		}
-		Map<String,FNode> map=Maps.newHashMap();
+		
 		List<FileSystemTask> tasks = Lists.newArrayList();
 		for (File file2 : content) {
 			if (file2.isDirectory()) {
 				////path处理 file://host/xxx/xxxxx
-				fnode=new FNode();
-				fnode.setId(Seq.nextId());
-				fnode.setFolder(true);
-				fnode.setModified(file2.lastModified());
-				fnode.setPath(file2.getAbsolutePath());//需要减去配置的目录
-				fnode.setName(file2.getPath());
-				fnode.setParent(file2.getParentFile().getAbsolutePath());
 				
-				map.put(file2.getAbsolutePath(), fnode);
 				FileSystemTask task = new FileSystemTask(file2.getAbsolutePath());
 				task.fork(); 
 				tasks.add(task);
 				
 			} else {
 				
-				//是文件直接加入node里面
-				fnode=new FNode();
-				fnode.setId(Seq.nextId());
-				fnode.setFolder(false);
-				fnode.setModified(file2.lastModified());
-				fnode.setPath(file2.getAbsolutePath());//需要减去配置的目录
-				fnode.setName(file2.getPath());
-				fnode.setParent(file2.getParentFile().getAbsolutePath());
-				fnode.setLength(file2.length());
-				//monitor.addFile(new File(String.valueOf(file2.getAbsolutePath())));
-
+//				if(FileNameUtils.getExtension(file2.getAbsolutePath()).equalsIgnoreCase("txt")){
+//					
+//				}
+				Document doc=new Document();
+				String filepath=file2.getAbsolutePath();
+			  Field type=new StringField(FileQuery.FILE_QUERY.FILETYPE, FileNameUtils.getExtension(filepath), Field.Store.YES);
+			  Field name=new TextField(FileQuery.FILE_QUERY.FILENAME, FileNameUtils.getBaseName(filepath), Field.Store.YES);
+			  Field size=new StringField(FileQuery.FILE_QUERY.FILESIZE,String.valueOf(file2.length()),Field.Store.YES);
+			  Field path=new TextField(FileQuery.FILE_QUERY.FILEPATH, FileNameUtils.getFullPathNoEndSeparator(filepath), Field.Store.YES);
+			  
+			 doc.add(type);
+			 doc.add(path);
+			 doc.add(name);
+			 doc.add(size);
+			 docs.add(doc);
 				
-				
-				map.put(file2.getAbsolutePath(), fnode);
 			}
 		}
 		for (FileSystemTask item : tasks) {
 			//list.addAll(item.join());
 			
-			map.putAll(item.join());
+			docs.addAll(item.join());
 		}
 		
 		
 		
-		return map;
+		return docs;
 	}
 
 }

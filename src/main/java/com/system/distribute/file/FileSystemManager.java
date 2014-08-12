@@ -95,14 +95,13 @@ public class FileSystemManager extends NodeManager{// implements SimpleFileSyste
 		case SELECT:
 			
 	         for (Condition condition : conditions) {
-				Relative relative=condition.getRelative();
-				 
-					 //TODO 还未能实现 多表关联判断  还要想一下类似数据库怎么实现
+				     Relative relative=condition.getRelative();
+				     if(relative.equals(Relative.LIKE)){
+				    	 build.put(condition.getX(), "%"+condition.getY()+"%"); 
+				     }else{
 					 build.put(condition.getX(), condition.getY());
-				 
-//				if(relative.equals(Relative.EQUAL)){
-//					
-//				}
+				     }
+
 			}
 	        
 	        build.put("commandType",String.valueOf(Command.SELECT.ordinal()));//命令类型 标示为查询

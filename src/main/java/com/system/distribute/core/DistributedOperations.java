@@ -20,7 +20,7 @@ package com.system.distribute.core;
 public interface DistributedOperations {
 
 	<T> T query(String sql,Callback<T> callback,Adapter adapter) throws Exception;
-	<T> void insert(String sql,Adapter<T> adapter) throws Exception;
-	<T> void sync(String sql,Adapter<T> adapter) throws Exception;
-	<T>	 void delete(String sql, Adapter<T> adapter) throws Exception;
+	<T> void insert(String sql,Adapter adapter) throws Exception;
+	<T> void sync(String sql,Adapter adapter) throws Exception;
+	<T>	 void delete(String sql, Adapter adapter) throws Exception;
 }

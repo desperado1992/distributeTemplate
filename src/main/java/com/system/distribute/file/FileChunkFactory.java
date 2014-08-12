@@ -54,7 +54,7 @@ public class FileChunkFactory {
 	         			chunk = tmp;
 	                 }
 	                fchunk.setBytes(chunk);
-	                fchunk.setChunk(chunkID);
+	                fchunk.setChunk(chunkID+1);
 	                fchunk.setHash(Checksum.byteToHex(md.digest()));
 	                file.put(chunkID, fchunk);
 	               

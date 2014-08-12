@@ -37,7 +37,7 @@ public class NodeFactory {
 
 	private IConfig config;
 
-	private static Map<String,Node> caches=Maps.newHashMap();
+	public static Map<String,Node> caches=Maps.newHashMap();
 	
 	public  Node createNode(Class<? extends Node> clazz){
 		Node nd=null;

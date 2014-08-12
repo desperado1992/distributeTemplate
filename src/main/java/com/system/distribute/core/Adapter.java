@@ -11,7 +11,7 @@ import com.system.distribute.sqlparser.Query;
  * @created 2014-7-9 下午12:37:38 
  * @function:外部数据源，后期需引入dsl 解析器 主要有 也许要提供xml adapter解析定义
  */
-public interface Adapter<T> {
+public interface Adapter {
     /**
      * 设置 节点管理器  用户 对外部数据源的查询
      * @param nodeManager

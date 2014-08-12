@@ -6,7 +6,7 @@ import java.util.List;
 import com.system.distribute.config.SimpleDistributeConfig;
 import com.system.distribute.context.AbstractContext;
 import com.system.distribute.context.Context;
-import com.system.distribute.file.FNode;
+
 import com.system.distribute.file.FileAdapter;
 import com.system.distribute.file.FileSystem;
 import com.system.distribute.file.FileSystemManager;
@@ -20,10 +20,11 @@ public class NodeTest {
 		SimpleDistributeConfig config=new SimpleDistributeConfig(new AbstractContext(){
 			
 		});
-		NodeManager manager=new FileSystemManager(new NodeFactory(config),new FileSystemService());
+		NodeFactory nodeFactory=new NodeFactory(config);
+		NodeManager manager=new FileSystemManager(nodeFactory,new FileSystemService(nodeFactory));
 		DistributedTemplate template=new DistributedTemplate(manager);
 		//template.setNodeManager(manager);
-		template.insert("insert into h2 values(F:/html20131128/hostel)", new FileAdapter<FNode>());
+		template.insert("insert into h2 values(F:/html20131128/hostel)", new FileAdapter());
 		//template.deleteFile("delete from h2 where name=d:/upload/zhuyuping.jpg");
 		//template.initContext(context);
 		//context.setTemplate(distributedTemplate)

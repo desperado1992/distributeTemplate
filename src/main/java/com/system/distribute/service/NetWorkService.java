@@ -27,7 +27,10 @@ import com.system.common.InfiniteLoopDaemon;
 import com.system.distribute.client.BIOClient;
 import com.system.distribute.client.TCPClient;
 import com.system.distribute.config.IConfig;
+import com.system.distribute.core.Node;
+import com.system.distribute.core.NodeFactory;
 import com.system.distribute.file.FileSummary;
+import com.system.distribute.file.FileSystem;
 import com.system.distribute.file.helper.HttpUploadServer;
 import com.system.distribute.file.monitor.FileDataMessage;
 
@@ -48,6 +51,16 @@ public abstract class NetWorkService implements Service{
 	
 	//protected  BIOClient client;
 	
+	private Node node;
+	
+	
+	
+	public NetWorkService(Node node) {
+		super();
+		this.node = node;
+	}
+
+
 	protected String name;
 	
 	private Thread thread=null;
@@ -70,8 +83,8 @@ public abstract class NetWorkService implements Service{
 		//server.start();
 		try{
 			//异步不能阻塞
-			System.out.println("NetWorkService.dostart() "+config.getContext().getCurrHost().getPort());
-		  thread=new Thread(new HttpUploadServer(config.getContext().getCurrHost().getPort()));
+			
+		  thread=new Thread(new HttpUploadServer(config.getContext().getCurrHost().getPort(),new NodeFactory(config).createNode(FileSystem.class)));
 		  thread.start();
 		  
 		}catch(Exception e){

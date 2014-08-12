@@ -11,8 +11,22 @@ import io.netty.handler.ssl.SslHandler;
 
 import javax.net.ssl.SSLEngine;
 
+import com.system.distribute.core.Node;
+
 public class HttpUploadServerInitializer extends ChannelInitializer<SocketChannel> {
-    @Override
+	
+	private Node node;
+	
+	
+	
+    public HttpUploadServerInitializer(Node node) {
+		super();
+		this.node = node;
+	}
+
+
+
+	@Override
     public void initChannel(SocketChannel ch) throws Exception {
         // Create a default pipeline implementation.
         ChannelPipeline pipeline = ch.pipeline();
@@ -25,6 +39,6 @@ public class HttpUploadServerInitializer extends ChannelInitializer<SocketChanne
         // compression.
         pipeline.addLast("deflater", new HttpContentCompressor());
 
-        pipeline.addLast("handler", new HttpUploadServerHandler());
+        pipeline.addLast("handler", new HttpUploadServerHandler(node));
     }
 }

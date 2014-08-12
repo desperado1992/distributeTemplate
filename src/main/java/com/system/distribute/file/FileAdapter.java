@@ -29,7 +29,7 @@ import com.system.distribute.sqlparser.Query;
  * @created 2014-7-22 下午5:38:31 
  * @function:
  */
-public class FileAdapter<FNode> implements Adapter<FNode>{
+public class FileAdapter implements Adapter{
 
 	private FileSystemManager fileSystemManager;
 	

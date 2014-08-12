@@ -35,12 +35,31 @@ import java.security.PrivilegedAction;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.apache.lucene.index.Term;
+import org.apache.lucene.queryparser.classic.ParseException;
+import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.search.FuzzyQuery;
+import org.apache.lucene.search.NumericRangeQuery;
+import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.BooleanClause.Occur;
+import org.apache.lucene.util.Version;
+
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.system.distribute.config.IConfig;
+import com.system.distribute.core.Node;
+import com.system.distribute.core.NodeFactory;
 import com.system.distribute.file.FileChunk;
+import com.system.distribute.file.FileQuery;
+import com.system.distribute.file.FileSystem;
+import com.system.distribute.sqlparser.Query;
 import com.system.distribute.util.FileUtil;
 
 
@@ -52,6 +71,8 @@ public class HttpUploadServerHandler extends SimpleChannelInboundHandler<HttpObj
     private HttpRequest request;
 
     private boolean readingChunks;
+    
+    private Node node=null;
 
     private final StringBuilder responseContent = new StringBuilder();
 
@@ -70,9 +91,16 @@ public class HttpUploadServerHandler extends SimpleChannelInboundHandler<HttpObj
     boolean iscreate=false;
     
     // exceed
+    
+    
+    
   
     private HttpPostRequestDecoder decoder;
-    static {
+    public HttpUploadServerHandler(Node node) {
+		super();
+		this.node = node;
+	}
+	static {
         DiskFileUpload.deleteOnExitTemporaryFile = true; // should delete file
                                                          // on exit (in normal
                                                          // exit)
@@ -91,26 +119,13 @@ public class HttpUploadServerHandler extends SimpleChannelInboundHandler<HttpObj
 
     @Override
     public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) throws Exception {
-        if (msg instanceof HttpRequest) {
+    	Map<String, List<String>> uriAttributes=null;
+    	if (msg instanceof HttpRequest) {
             HttpRequest request = this.request = (HttpRequest) msg;
             //GET请求解析 
             QueryStringDecoder decoderQuery = new QueryStringDecoder(request.getUri());
-            Map<String, List<String>> uriAttributes = decoderQuery.parameters();
-            for (Entry<String, List<String>> attr: uriAttributes.entrySet()) {
-            	String key=attr.getKey();
-            	 paths=Lists.newArrayList(); 
-            	List<String> vals=attr.getValue();
-            	if("name".equalsIgnoreCase(key)){
-                	//文件删除发送过来的path
-                	
-                	paths=Lists.newArrayList();
-                	
-                }else if("commandType".equalsIgnoreCase(key)){
-                	type=Integer.parseInt(vals.get(0));
-                	
-                }
-                
-            }
+            uriAttributes = decoderQuery.parameters();
+           
             //POST请求解析
             try {
                 decoder = new HttpPostRequestDecoder(factory, request);
@@ -127,11 +142,24 @@ public class HttpUploadServerHandler extends SimpleChannelInboundHandler<HttpObj
             }
             
         }
-        if(type!=-1){
-        	switch (type) {
+       
+        	
+			switch (type) {
 			
 			case 1:
 				//删除命令
+				 for (Entry<String, List<String>> attr: uriAttributes.entrySet()) {
+		            	String key=attr.getKey();
+		            	 paths=Lists.newArrayList(); 
+		            	List<String> vals=attr.getValue();
+		            	if("name".equalsIgnoreCase(key)){
+		                	//文件删除发送过来的path
+		                	paths=Lists.newArrayList();
+		                }else if("commandType".equalsIgnoreCase(key)){
+		                	type=Integer.parseInt(vals.get(0));
+		                }
+		                
+		            }
 				if(paths!=null){
 				for (String path : paths) {
 
@@ -142,9 +170,27 @@ public class HttpUploadServerHandler extends SimpleChannelInboundHandler<HttpObj
 				break;
 			case 2:
 				//修改
+				
 				break;
 			case 3:
 				//查询
+				//用户是查询
+				//分装成query 以后
+				//node.getClass().getClassLoader().loadClass(Node.class.)
+				BooleanQuery query=wrapAttrs(uriAttributes.entrySet());	 
+//		         String packName=Node.class.getPackage().getName();
+//		         String fclassName=packName.substring(0, packName.lastIndexOf("."))+".file."+FileSystem.class.getSimpleName();
+//		         Class<? extends FileSystem> fileSystemClazz=Node.class.getClassLoader().loadClass(fclassName).asSubclass(FileSystem.class);
+//                 fileSystemClazz.getConstructor(IConfig.class).newInstance(node.getConfig());
+				//String packName=Node.class.getPackage().getName();
+				FileSystem fileSystem=null;
+				if((fileSystem=(FileSystem) NodeFactory.caches.get(FileSystem.class))!=null){
+					TopDocs docs=fileSystem.search(query);
+					for (ScoreDoc scoreDoc : docs.scoreDocs) {
+						System.out
+								.println("查询的结果测试++++++++++++++++ "+scoreDoc);
+					}
+				}
 				break;
 			case 4:
 				//同步操作
@@ -156,7 +202,7 @@ public class HttpUploadServerHandler extends SimpleChannelInboundHandler<HttpObj
 			}
         	
         	
-        }
+      
         if (decoder != null) {
             if (msg instanceof HttpContent) {
               
@@ -180,8 +226,62 @@ public class HttpUploadServerHandler extends SimpleChannelInboundHandler<HttpObj
             }
         }
     }
+    /**
+     * RPC生成的 用于调用 
+     * @param attrs
+     * @return
+     * 添加（修改）人：zhuyuping
+     */
+    private   BooleanQuery  wrapAttrs(Set<Entry<String, List<String>>> attrs) {
+    	try{
+    	BooleanQuery muquery = new BooleanQuery();
+		for (Entry<String, List<String>> entry : attrs) {
+			String fieldName=entry.getKey();
+			List<String> vals=entry.getValue();
+			for (String need : vals) {
+				if(need.contains(".")){
+			    	String[] keys=need.split("\\.");
+			    	need=keys[1];
+			    	}
+				if(fieldName.equalsIgnoreCase(FileQuery.FILE_QUERY.FILENAME)){
+					
+					QueryParser parser = new QueryParser(Version.LUCENE_4_9, FileQuery.FILE_QUERY.FILENAME, FileSystem.analyzer);
+					
+					org.apache.lucene.search.Query q;
+					
+						q = parser.parse(need);
+					
+					muquery.add(q, Occur.MUST); 
+					
+				}else if(fieldName.equalsIgnoreCase(FileQuery.FILE_QUERY.FILESIZE)){
+					int min=Integer.valueOf(need)-1024*1024;
+					min=min<0?0:min;
 
-    private void reset() {
+				    muquery.add(NumericRangeQuery.newIntRange(
+				    		FileQuery.FILE_QUERY.FILESIZE, min, Integer.valueOf(need)+1024*1024, true, true), Occur.MUST);
+				}else if(fieldName.equalsIgnoreCase(FileQuery.FILE_QUERY.FILEPATH)){
+					
+					Term t = new Term(FileQuery.FILE_QUERY.FILEPATH, need);  
+					muquery.add(new FuzzyQuery(t), Occur.MUST);
+					
+				}else if(fieldName.equalsIgnoreCase(FileQuery.FILE_QUERY.FILETYPE)){
+					Term t = new Term(FileQuery.FILE_QUERY.FILETYPE, need);  
+					muquery.add(new TermQuery(t), Occur.MUST);
+				}else if(fieldName.equalsIgnoreCase(FileQuery.FILE_QUERY.FILEOUT)){
+					
+				}
+			}
+			
+		}
+		return muquery;
+    	}catch(Exception e){
+    		
+    		return null;
+    	}
+		
+	}
+
+	private void reset() {
         request = null;
         type=-1;
         paths=null;

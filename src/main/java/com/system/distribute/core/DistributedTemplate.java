@@ -1,6 +1,5 @@
 package com.system.distribute.core;
 
-import com.system.distribute.file.FNode;
 import com.system.distribute.file.FileAdapter;
 import com.system.distribute.sqlparser.Query;
 //extends NodeManager 吧基层改为 set 注入 便于后面整合spring  implenments ApplicationContextWare/FactoryBean
@@ -44,15 +43,15 @@ public class DistributedTemplate extends DSLParser implements DistributedOperati
 	}
 	public void insertFile(String sql) throws Exception{
 		
-		insert(sql, new FileAdapter<FNode>());
+		insert(sql, new FileAdapter());
 	}
 
 	@Override
-	public <T> void insert(String sql, Adapter<T> adapter) throws Exception {
+	public  void insert(String sql, Adapter adapter) throws Exception {
 		  executeCommand(sql, adapter);
 	}
 
-	private <T> ResultSet executeCommand(String sql, Adapter<T> adapter)
+	private  ResultSet executeCommand(String sql, Adapter adapter)
 			throws Exception {
 		Query query=parser(sql);
 	      adapter.setNodeManager(nodeManager);
@@ -60,25 +59,25 @@ public class DistributedTemplate extends DSLParser implements DistributedOperati
 	}
 
 	@Override
-	public <T> void sync(String sql, Adapter<T> adapter) throws Exception {
+	public  void sync(String sql, Adapter adapter) throws Exception {
 		
 		 executeCommand(sql, adapter);
 	}
 
 	public  void syncFile(String sql) throws Exception {
 		
-		sync(sql, new FileAdapter<FNode>());
+		sync(sql, new FileAdapter());
 	}
 	
 	@Override
-	public <T> void delete(String sql, Adapter<T> adapter) throws Exception {
+	public  void delete(String sql, Adapter adapter) throws Exception {
 		
 		 executeCommand(sql, adapter);
 	}
 
 	public  void deleteFile(String sql) throws Exception {
 		
-		delete(sql, new FileAdapter<FNode>());
+		delete(sql, new FileAdapter());
 	}
 
 	

@@ -23,8 +23,11 @@ import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.InputSupplier;
 
+import com.system.distribute.core.Node;
+import com.system.distribute.core.NodeFactory;
 import com.system.distribute.file.FileSummary;
 import com.system.distribute.file.FileSyncTask;
+import com.system.distribute.file.FileSystem;
 import com.system.distribute.file.helper.ServerHelper;
 import com.system.distribute.file.monitor.FileDataMessage;
 
@@ -37,7 +40,10 @@ public class FileSystemService extends NetWorkService{
      */
 	private List<InetSocketAddress> hosts=Lists.newCopyOnWriteArrayList();
 	
-    @Override
+    public FileSystemService(NodeFactory nodeFactory) {
+		super(nodeFactory.createNode(FileSystem.class));
+	}
+	@Override
 	public void init() {
 		//启动文件同步服务系需要的资源
 		//初始化所有节点信息 同时需要快速找到
